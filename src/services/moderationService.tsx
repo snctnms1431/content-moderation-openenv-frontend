@@ -28,7 +28,7 @@ export interface HealthStatus {
   };
 }
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = process.env.API_URL;
 
 class ModerationService {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
