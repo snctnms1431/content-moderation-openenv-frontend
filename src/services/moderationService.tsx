@@ -1,4 +1,7 @@
-// src/services/moderationService.ts
+// src/services/moderationService.tsx
+
+// Use ONLY the Hugging Face URL - no fallback to localhost
+const API_BASE_URL = 'https://Ajinkyakakade02-content-moderation-openenv.hf.space';
 
 export interface ModerationContent {
   type: 'text' | 'image' | 'video';
@@ -28,19 +31,6 @@ export interface HealthStatus {
   };
 }
 
-// Get API URL based on environment
-const getApiUrl = () => {
-  const API_BASE_URL = import.meta.env.PROD ? '/api' : 'http://localhost:5000';
-  // Production (Vercel) - use Hugging Face backend
-  if (import.meta.env.PROD) {
-    return 'https://Ajinkyakakade02-content-moderation-openenv.hf.space';
-  }
-  // Development (local)
-  return import.meta.env.VITE_API_URL || 'http://localhost:5000';
-};
-
-const API_BASE_URL = getApiUrl();
-
 class ModerationService {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -53,6 +43,7 @@ class ModerationService {
           'Content-Type': 'application/json',
           ...options?.headers,
         },
+        mode: 'cors',
       });
 
       if (!response.ok) {

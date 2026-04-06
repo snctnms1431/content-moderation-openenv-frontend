@@ -13,7 +13,6 @@ import {
   IconChartBar,
   IconArrowRight
 } from '@tabler/icons-react';
-import { useModeration } from '@/hooks/useModeration';
 import { moderationService } from '@/services/moderationService';
 
 // Define types
@@ -30,10 +29,6 @@ interface ModerationResult {
   ai_available: boolean;
 }
 
-interface ApiError {
-  message: string;
-}
-
 const tabs: { type: ContentType; label: string; icon: React.ReactNode }[] = [
   { type: 'text', label: 'Text', icon: <IconFileText size={18} /> },
   { type: 'image', label: 'Image', icon: <IconPhoto size={18} /> },
@@ -41,30 +36,11 @@ const tabs: { type: ContentType; label: string; icon: React.ReactNode }[] = [
   { type: 'audio', label: 'Audio', icon: <IconMusic size={18} /> },
 ];
 
-
-
 export default function UploadSection() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<ContentType>('text');
+  const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   
-const navigateToDetailedAnalysis = () => {
-  const currentResult = getCurrentResult();
-  const currentContent = activeTab === 'text' ? textContent : 
-                         activeTab === 'image' ? selectedImage?.name : 
-                         activeTab === 'video' ? selectedVideo?.name : '';
-  
-  if (currentResult) {
-    navigate('/detailed-analysis', {
-      state: {
-        result: currentResult,
-        contentType: activeTab,
-        content: currentContent
-      }
-    });
-  }
-};
-
-
   // Text state
   const [textContent, setTextContent] = useState('');
   const [textResult, setTextResult] = useState<ModerationResult | null>(null);
@@ -84,12 +60,23 @@ const navigateToDetailedAnalysis = () => {
   const [videoResult, setVideoResult] = useState<ModerationResult | null>(null);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
-  
-  const { isBackendAvailable, checkBackend } = useModeration();
+
+  // Check backend status
+  const checkBackend = async () => {
+    try {
+      const response = await fetch('https://Ajinkyakakade02-content-moderation-openenv.hf.space/health');
+      const data = await response.json();
+      setIsBackendAvailable(data.status === 'active' || data.status === 'ok');
+    } catch (error) {
+      setIsBackendAvailable(false);
+    }
+  };
 
   useEffect(() => {
     checkBackend();
-  }, [checkBackend]);
+  }, []);
+
+  const API_URL = 'https://Ajinkyakakade02-content-moderation-openenv.hf.space';
 
   // Handle Text Analysis
   const handleTextAnalyze = async () => {
@@ -100,7 +87,7 @@ const navigateToDetailedAnalysis = () => {
     setTextResult(null);
     
     try {
-      const response = await fetch('http://localhost:5000/moderate', {
+      const response = await fetch(`${API_URL}/moderate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,15 +114,13 @@ const navigateToDetailedAnalysis = () => {
     setImageError(null);
     setIsImageLoading(true);
     
-    // Create preview
     const previewUrl = URL.createObjectURL(file);
     setImagePreview(previewUrl);
     
-    // Convert to base64 and analyze
     const base64 = await moderationService.fileToBase64(file);
     
     try {
-      const response = await fetch('http://localhost:5000/moderate', {
+      const response = await fetch(`${API_URL}/moderate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -162,15 +147,13 @@ const navigateToDetailedAnalysis = () => {
     setVideoError(null);
     setIsVideoLoading(true);
     
-    // Create preview
     const previewUrl = URL.createObjectURL(file);
     setVideoPreview(previewUrl);
     
-    // Convert to base64 and analyze
     const base64 = await moderationService.fileToBase64(file);
     
     try {
-      const response = await fetch('http://localhost:5000/moderate', {
+      const response = await fetch(`${API_URL}/moderate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -197,7 +180,7 @@ const navigateToDetailedAnalysis = () => {
     setActiveTab(type);
   };
 
-  // Clear current tab's result (for new upload)
+  // Clear current tab's result
   const clearCurrentResult = () => {
     if (activeTab === 'text') {
       setTextContent('');
@@ -216,19 +199,6 @@ const navigateToDetailedAnalysis = () => {
     }
   };
 
-  // Navigate to dashboard with current result
-  const navigateToDashboard = () => {
-    const currentResult = getCurrentResult();
-    if (currentResult) {
-      sessionStorage.setItem('lastModerationResult', JSON.stringify(currentResult));
-      sessionStorage.setItem('lastContentType', activeTab);
-      if (activeTab === 'text') {
-        sessionStorage.setItem('lastContent', textContent);
-      }
-    }
-    navigate('/dashboard');
-  };
-
   const getCurrentResult = (): ModerationResult | null => {
     if (activeTab === 'text') return textResult;
     if (activeTab === 'image') return imageResult;
@@ -236,25 +206,21 @@ const navigateToDetailedAnalysis = () => {
     return null;
   };
 
-  const getCurrentLoading = (): boolean => {
-    if (activeTab === 'text') return isTextLoading;
-    if (activeTab === 'image') return isImageLoading;
-    if (activeTab === 'video') return isVideoLoading;
-    return false;
-  };
-
-  const getCurrentError = (): string | null => {
-    if (activeTab === 'text') return textError;
-    if (activeTab === 'image') return imageError;
-    if (activeTab === 'video') return videoError;
-    return null;
-  };
-
-  const hasCurrentResult = (): boolean => {
-    if (activeTab === 'text') return textResult !== null;
-    if (activeTab === 'image') return imageResult !== null;
-    if (activeTab === 'video') return videoResult !== null;
-    return false;
+  const navigateToDetailedAnalysis = () => {
+    const currentResult = getCurrentResult();
+    const currentContent = activeTab === 'text' ? textContent : 
+                           activeTab === 'image' ? selectedImage?.name : 
+                           activeTab === 'video' ? selectedVideo?.name : '';
+    
+    if (currentResult) {
+      navigate('/detailed-analysis', {
+        state: {
+          result: currentResult,
+          contentType: activeTab,
+          content: currentContent
+        }
+      });
+    }
   };
 
   const renderResult = (result: ModerationResult, type: string): React.ReactNode => {
@@ -332,15 +298,14 @@ const navigateToDetailedAnalysis = () => {
           </div>
         </div>
 
-        {/* Navigate to Dashboard Button */}
         <button
-  onClick={navigateToDetailedAnalysis}
-  className="mt-4 w-full py-2.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-400 font-medium text-sm hover:bg-purple-500/30 transition-all flex items-center justify-center gap-2"
->
-  <IconChartBar size={16} />
-  View Detailed Analysis
-  <IconArrowRight size={14} />
-</button>
+          onClick={navigateToDetailedAnalysis}
+          className="mt-4 w-full py-2.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-400 font-medium text-sm hover:bg-purple-500/30 transition-all flex items-center justify-center gap-2"
+        >
+          <IconChartBar size={16} />
+          View Detailed Analysis
+          <IconArrowRight size={14} />
+        </button>
       </motion.div>
     );
   };
@@ -371,7 +336,7 @@ const navigateToDetailedAnalysis = () => {
           {/* Backend Status */}
           {!isBackendAvailable && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 text-center">
-              ⚠️ AI Backend not connected. Run: python backend/api_server.py
+              ⚠️ AI Backend not connected. 
               <button onClick={checkBackend} className="ml-3 underline hover:no-underline">Retry</button>
             </div>
           )}

@@ -1,84 +1,112 @@
-// src/hooks/useModeration.ts
+// src/services/moderationService.tsx
 
-import { useState, useCallback } from 'react';
-import { moderationService, ModerationResult, ModerationContent } from '@/services/moderationService';
+// Use ONLY the Hugging Face URL - no fallback to localhost
+const API_BASE_URL = 'https://Ajinkyakakade02-content-moderation-openenv.hf.space';
 
-interface UseModerationReturn {
-  moderate: (content: ModerationContent) => Promise<ModerationResult | null>;
-  isLoading: boolean;
-  error: string | null;
-  lastResult: ModerationResult | null;
-  reset: () => void;
-  isBackendAvailable: boolean;
-  checkBackend: () => Promise<boolean>;
+export interface ModerationContent {
+  type: 'text' | 'image' | 'video';
+  data: string;
+  filename?: string;
+  size?: number;
 }
 
-export function useModeration(): UseModerationReturn {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<ModerationResult | null>(null);
-  const [isBackendAvailable, setIsBackendAvailable] = useState(false);
+export interface ModerationResult {
+  action: 'ALLOW' | 'FLAG' | 'REMOVE';
+  harmful_score: number;
+  confidence: number;
+  violations: string[];
+  reason: string;
+  content_type: string;
+  detection_method: string;
+  ai_available: boolean;
+}
 
-  const checkBackend = useCallback(async (): Promise<boolean> => {
-    try {
-      const health = await moderationService.checkHealth();
-      const available = health.status === 'ok';
-      setIsBackendAvailable(available);
-      return available;
-    } catch (err) {
-      setIsBackendAvailable(false);
-      return false;
-    }
-  }, []);
-
-  const moderate = useCallback(async (content: ModerationContent): Promise<ModerationResult | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      let result: ModerationResult;
-      
-      switch (content.type) {
-        case 'text':
-          result = await moderationService.moderateText(content.data);
-          break;
-        case 'image':
-          result = await moderationService.moderateImage(content.data);
-          break;
-        case 'video':
-          result = await moderationService.moderateVideo(
-            content.data,
-            content.filename || 'video',
-            content.size || 0
-          );
-          break;
-        default:
-          throw new Error('Unsupported content type');
-      }
-      
-      setLastResult(result);
-      return result;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Moderation failed';
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    setError(null);
-    setLastResult(null);
-  }, []);
-
-  return {
-    moderate,
-    isLoading,
-    error,
-    lastResult,
-    reset,
-    isBackendAvailable,
-    checkBackend,
+export interface HealthStatus {
+  status: string;
+  ai_available: boolean;
+  capabilities: {
+    text: boolean;
+    image: boolean;
+    video: boolean;
   };
 }
+
+class ModerationService {
+  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log(`📡 API Request: ${url}`);
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+        mode: 'cors',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      throw error;
+    }
+  }
+
+  async checkHealth(): Promise<HealthStatus> {
+    return this.request<HealthStatus>('/health');
+  }
+
+  async moderateText(text: string): Promise<ModerationResult> {
+    return this.request<ModerationResult>('/moderate', {
+      method: 'POST',
+      body: JSON.stringify({
+        content: {
+          type: 'text',
+          data: text,
+        },
+      }),
+    });
+  }
+
+  async moderateImage(imageBase64: string): Promise<ModerationResult> {
+    return this.request<ModerationResult>('/moderate', {
+      method: 'POST',
+      body: JSON.stringify({
+        content: {
+          type: 'image',
+          data: imageBase64,
+        },
+      }),
+    });
+  }
+
+  async moderateVideo(videoBase64: string, filename: string, size: number): Promise<ModerationResult> {
+    return this.request<ModerationResult>('/moderate', {
+      method: 'POST',
+      body: JSON.stringify({
+        content: {
+          type: 'video',
+          data: videoBase64,
+          filename,
+          size,
+        },
+      }),
+    });
+  }
+
+  async fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  }
+}
+
+export const moderationService = new ModerationService();
