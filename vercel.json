@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://Ajinkyakakade02-content-moderation-openenv.hf.space"
+      "destination": "https://Ajinkyakakade02-content-moderation-openenv.hf.space/$1"
     },
     {
       "source": "/(.*)",
