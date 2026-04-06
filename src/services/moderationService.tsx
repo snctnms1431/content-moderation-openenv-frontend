@@ -28,23 +28,42 @@ export interface HealthStatus {
   };
 }
 
-const API_BASE_URL = process.env.API_URL;
+// Get API URL based on environment
+const getApiUrl = () => {
+  const API_BASE_URL = import.meta.env.PROD ? '/api' : 'http://localhost:5000';
+  // Production (Vercel) - use Hugging Face backend
+  if (import.meta.env.PROD) {
+    return 'https://Ajinkyakakade02-content-moderation-openenv.hf.space';
+  }
+  // Development (local)
+  return import.meta.env.VITE_API_URL || 'http://localhost:5000';
+};
+
+const API_BASE_URL = getApiUrl();
 
 class ModerationService {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    });
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log(`📡 API Request: ${url}`);
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async checkHealth(): Promise<HealthStatus> {
